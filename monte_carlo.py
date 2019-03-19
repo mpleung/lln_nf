@@ -8,8 +8,8 @@ np.random.seed(seed=seed)
 
 ### Key user parameters ###
 
-simulate_only = False # set to true to simulate limit expectation
-subcritical = False # set to false for supercritical design
+simulate_only = True # set to true to simulate limit expectation
+subcritical = True # set to false for supercritical design
 
 d = 2 # dimension of node positions
 n_vec = [100,500,2000,5000] # number of nodes
@@ -51,10 +51,21 @@ if simulate_only:
 
     for b in range(B):
         # Simulate Poisson(kappa f(i)), where f(i) = 1 because positions are drawn from U[0,1]^2 in the finite model. 
-        # Since it's not possibly to simulate an infinite number of points, we instead simulate a Poisson(kappa f(i)) process restricted to [-4,4]^2. Given the RGG link radius is 1 and we're interested in only the statistic of the node at the origin, this should be good enough.
-        # To simulate from this restricted process we make use of the fact that it has the same distribution as (X_1, ..., X_N) i.i.d. draws from U([-4,4]^2) where N is Poisson(kappa/4*64)
+        # Since it's not possibly to simulate an infinite number of points, we instead simulate a Poisson(kappa f(i)) process restricted to [-10,10]^2. Given the RGG link radius is 1 and we're interested in only the statistic of the node at the origin, this should be good enough.
+        # To simulate from this restricted process we make use of the fact that it has the same distribution as (X_1, ..., X_N) i.i.d. draws from U([-10,10]^2) where N is Poisson(kappa*(10-(-10))^2)
         N = np.random.poisson(kappa * 400, 1)[0]
-        G = gen_SNF(theta, d, N+1, r, True)
+        # positions uniformly distributed on unit cube, plus extra node positioned at origin
+        positions = np.vstack([[0,0], np.random.uniform(-10,10,(N,d))])
+        Z = np.random.binomial(1, 0.5, N+1)
+        # random utility terms
+        eps = sparse.triu(np.random.normal(size=(N+1,N+1)), 1) * theta[3]
+        # V minus endogenous statistic
+        V_exo = gen_V_exo(Z, eps, theta)
+        # generate random graphs
+        RGG = gen_RGG(positions, 1) # initial RGG
+        (D, RGG_minus, RGG_exo) = gen_D(RGG, V_exo, theta[2])
+        # generate pairwise-stable network
+        G = gen_G(D, RGG_minus, RGG_exo, V_exo, theta[2], N+1, Z, True)
 
         # extract clustering coefficient, degree of node at origin
         limit_cc += snap.GetNodeClustCf(G, 0) / float(B)
